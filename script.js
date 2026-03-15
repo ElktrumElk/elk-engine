@@ -1,28 +1,3 @@
-/*```
-function App() {
-@class header;
-@class par;
-
-$header {
-    ~backgroundColor = "blue";
-    ~color = "white";
-
-    this.addEventListener("click", () => {
-        alert("hello world");
-    });
-}
-
-$par {
-    ~backgroundColor = "black";
-    ~color = "white";
-}
-
-return (
-    <h1 class=$header>Hello</h1>
-    <p class=$par>Hello this is just a text</p>
-)
-}
-```*/
 
 /**
  * 
@@ -40,6 +15,7 @@ return (
  * }
  * ```
  */
+
 function CreateEnv(cb) {
 
     /**Holds the classes */
@@ -49,8 +25,6 @@ function CreateEnv(cb) {
     let lineCount = 0;
 
     let __elements = new Array();
-
-
 
 
     /**Check wether a body an html was given*/
@@ -65,40 +39,71 @@ function CreateEnv(cb) {
     /**The html parser */
     const __parser = new DOMParser();
 
+    let l = "";
+
+    for (let c of lines) {
+        l += c;
+    };
+    /**==============================REGEX======================= */
+    /**THIS SEARCH FOR js scripts withing the $=>()*/
+    const __SCRIPTBLOCKPATTERN = /\$=>\s*\(([\s\S\r]*?)\)\$/g;
+    /**THIS SEARCHES FOR HTML BLOCK */
+    const __HTMLBLOCKPATTERN = /HTML\s*\<\$>([\s\r\S]*?)<\/\$>/g;
+    /**Class Search pattern */
+    
+    let __CLASSNAME = [...l.trim().toString().matchAll(/@class\s*([\s\S]*?)\{/g)];
+    console.log(__CLASSNAME);
+
+    /**Check for given html*/
+    let __HTML = [...l.toString().trim().matchAll(/HTML\s*\<\$>([\s\r\S]*?)<\/\$>/g)][0][1];
+
+    /**Get The conditional Script Block */
+    const __SCRIPTBLOCK = [...__HTML.toString().trim().matchAll(__SCRIPTBLOCKPATTERN)];
+
+    //console.log(__HTML); //debugging
+    //console.log(__SCRIPTBLOCK); //debugging
+    let _i = 0;
+
+    /**Loop the blocks*/
+    __SCRIPTBLOCK.forEach(__block => {
+        try {
+            _i += 1;
+            let __execVal = eval(__block[1]);
+
+            if (__execVal === undefined) {
+                __execVal = "";
+            };
+
+            /**Replace conditional Block in the html block*/
+            const __ClEANHTML = __HTML.replace(/\$=>\s*\(/g, "").replace(/\)\$/, "").replace(__block[1], __execVal); // replace conditional block
+            __HTML = __ClEANHTML;
+
+            if (_i === __SCRIPTBLOCK.length) {
+                const doc = new DOMParser();
+                const __parsDoc = doc.parseFromString(__ClEANHTML.toString(), "text/html");
+
+                __parsDoc.body.childNodes.forEach(__node => {
+                    if(__node.classList != undefined) {
+                        if (__node.classList.value === "par"){
+                            __node.style.color = "red";
+                        }
+                    };
+
+                    const __IMPORTED = document.importNode(__node, true);
+                    document.body.appendChild(__IMPORTED);
+                    //console.log(__IMPORTED)
+                });
+            }
+        }
+        catch (e) {
+            console.error(e)
+        }
+    })
 
 
     for (let ch of lines) {
 
         lineCount += 1;
-
-
-        /**Check for the HTML keyword */
-        if (ch.trim().startsWith("HTML") && ch.trim().endsWith("(")) {
-            if (!_isInBody) {
-                _isInBody = true;
-
-
-            }
-
-        }
-
-        /**Comment: Extract the html elements */
-        if (ch.trim().startsWith("<") && _isInBody) {
-            let _element = ch.trim();
-            const _doc = __parser.parseFromString(_element, "text/html");
-            __elements.push(..._doc.body.children);
-
-        };
-        /**Comment: Check the end of the html block */
-        if (ch.trim().startsWith(")")) {
-            if (_isInBody) {
-                _isInBody = false;
-            }
-        };
-
-        /**Comment: Check for define classes */
-
-
         /**=====================THE CLASS SELECTOR============================
          * The @class is used to group html elements
          * 
@@ -138,7 +143,6 @@ function CreateEnv(cb) {
         if (ch.trim().startsWith("$")) {
             if (_isInClassBlock) {
                 const __class = ch.trim().replace("$", "").replace("{", "").split(".")[0];
-                console.log(__class.trim())
 
                 setTimeout(() => {
                     for (let _el of __elements) {
@@ -149,7 +153,7 @@ function CreateEnv(cb) {
                                 _line += c
                             };
                             const regex = new RegExp(`\\$${__class.trim()}\\s*\\{([\\s\\S]*?)\\}\\$`, "g");
-                            console.log(regex);
+
                             const _block = [..._line.toString().trim().matchAll(regex)];
 
                             _block.forEach(b => {
@@ -158,7 +162,7 @@ function CreateEnv(cb) {
                                 if (b[1].toString().trim().includes("$.")) {
                                     _exec = _exec.toString().trim().replaceAll("$.", `_el.`).replaceAll("_el.)", "_el)");
                                 }
-                                console.log(_exec)
+
                                 eval(_exec)
 
                             })
@@ -182,11 +186,6 @@ function CreateEnv(cb) {
      * The root
      */
 
-    __elements.forEach(_el => {
-
-        document.body.appendChild(_el);
-
-    })
 
     //=================================================================================
 
@@ -195,10 +194,7 @@ function CreateEnv(cb) {
 const keywords = ["@class", "HTML"]
 CreateEnv(() => {
     ``` 
-    @blend($color) {
-        --color = color;
-    };
-
+  
     @class header {
         --header.color = white;
         --header.backgroundColor = black;
@@ -206,10 +202,6 @@ CreateEnv(() => {
         --header.fontFamily = sans-serif;
         --header.textAlign = center;
 
-        
-        $header {  
-            alert("yup")
-        }$
     };
 
 
@@ -225,21 +217,45 @@ CreateEnv(() => {
                     document.body.appendChild(newPara);
 
                 };
-            })
-               
-            
-                
+            })        
         }$
 
     };
     
 
-    HTML (
-        <h1 class="header">About me</h1>
-        <p class="par">My name is Elkanah Cole Know more about <a href="#">Me</a></p>
-        <p>My name is Elkanah Cole Know more about my <a href="#">Love</a></p>
-    );
-   
-    
+    HTML <$>
+            <h1 class="header">
+                About me
+            </h1>
+
+            $=> (
+
+                (() => {
+
+                    if (name == "elk") {
+
+                        return '<p class="par">My name is Elkanah Cole Know more about <a href="#">Me</a></p>';
+
+                    }else {
+                        return '<p class="par">Please Enter a valid name</p>'
+                    }
+
+                })()
+
+            )$
+            
+            $=> (
+
+                (() => { 
+                    if (2==1) {
+                        return '<p>yes 2 == 2</p>'; 
+                    }
+                }
+                )();  
+
+            )$
+
+            <span>Come on</span>
+        </$>    
     ```
 })
