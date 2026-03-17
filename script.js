@@ -1,4 +1,73 @@
 
+/**Holds the classes name*/
+const __CLASSES = new Object();
+
+export function updateSatet(value, func) {
+
+    const proxy = new Proxy({ value }, {
+
+        set(target, property, nvalue) {
+            if (target[property] === nvalue) return true
+
+            target[property] = nvalue;
+            const __function = func.trim().replace("_$", "");
+            __function;
+            console.log("State change")
+            return true;
+        }
+    });
+
+    return proxy;
+};
+
+
+let __elm = new Array();
+
+export function placeElement({ _element, childNode, isReplace = false }) {
+    if (!isReplace) {
+        const _DOM = new DOMParser()
+        const _el = _DOM.parseFromString(_element.toString(), "text/html").body.children[0];
+
+        __renderClass(_el, __CLASSES); //render class of the element if any is given
+        __elm.push(_el);
+
+
+        /**Replace the element with it updated value*/
+        if (__elm.length > 1) {
+            __elm[__elm.length - 2].replaceWith(_el);
+        } else {
+            childNode.after(_el);
+        };
+
+        /*Comment: this reduce the size of the array making it length to be fixed at 2*/
+        if (__elm.length > 2) {
+            __elm = __elm.filter(x => x !== __elm[__elm.length - 3])
+        };
+
+    }
+    else {
+        console.log("Under critical thinking");
+    }
+}
+
+
+function __renderClass(__node, __CLASSES) {
+    if (__node.classList != undefined) {
+        if (__node.classList.length !== 0) {
+            if (__node.classList.value === __CLASSES[`${__node.classList.value}`].classname) {
+                const _styles = __CLASSES[`${__node.classList.value}`].styles;
+                _styles.forEach(style => {
+                    const [_prop, _value] = style.toString().replace(/^--/g, "").replace(",", " ").split("=", 2);
+                    __node.style[`${_prop}`] = _value;
+                });
+            }
+        }
+    }
+}
+
+
+
+
 /**
  * 
  * # CreateEnv
@@ -11,20 +80,35 @@
  * #### usage
  * ```
  * class (classname) {
- *  --(classname).color = "blue";
+ *  --color = blue;
  * }
  * ```
+ * 
+ * ## Conditional Rendering or Scripting
+ * Conditional Rendering or Scripting is a state where you controll which element should be render on the document
+ * ### Example:
+ * 
+ * ```
+ * $=> (
+ *  if (1 == 1) {
+ *      return "<p>Hello!</p>";
+ *  }else {
+ *      return "<p>Bye!</p>";
+ *  }
+ * )
+ * 
+ * ```
  */
+export default function CreateEnv(cb) {
 
-function CreateEnv(cb) {
-
-    /**Holds the classes */
-    let __classes = new Array();
 
     const lines = cb.toString().split("\r\n");
     let lineCount = 0;
 
     let __elements = new Array();
+
+    /**Docuemnt parser for external use */
+    let parseDoc;
 
 
     /**Check wether a body an html was given*/
@@ -50,24 +134,42 @@ function CreateEnv(cb) {
     /**THIS SEARCHES FOR HTML BLOCK */
     const __HTMLBLOCKPATTERN = /HTML\s*\<\$>([\s\r\S]*?)<\/\$>/g;
     /**Class Search pattern */
-    
-    let __CLASSNAME = [...l.trim().toString().matchAll(/@class\s*([\s\S]*?)\{/g)];
-    console.log(__CLASSNAME);
+    const __CLASSSNAMEEARCHPATTERN = /@class\s*([\s\S]*?)\{/g;
+    const __CLASSBLOCKSEARCHPATTERN = /@class\s*([\s\S]*?)\{([\s\S\r]*?)\}/g
+
+
+
+    let __CLASS = [...l.trim().toString().matchAll(/@class\s*([\s\S]*?)\{/g)];
+    let __CLASSVAL = [...l.trim().toString().matchAll(__CLASSBLOCKSEARCHPATTERN)];
+
+    __CLASS.forEach((_cls, _idx) => {
+
+        const _value = __CLASSVAL[_idx][2].trim().replaceAll(" ", "").split(";");
+        const _styles = _value.filter(x => x.startsWith("--"))
+
+        const __CLASSNAME = _cls[1].trim();
+        __CLASSES[__CLASSNAME] = {
+            styles: _styles,
+            classname: __CLASSNAME
+        };
+    });
 
     /**Check for given html*/
     let __HTML = [...l.toString().trim().matchAll(/HTML\s*\<\$>([\s\r\S]*?)<\/\$>/g)][0][1];
 
-    /**Get The conditional Script Block */
+    /**Get The conditional Script Block in the HTML body*/
     const __SCRIPTBLOCK = [...__HTML.toString().trim().matchAll(__SCRIPTBLOCKPATTERN)];
 
     //console.log(__HTML); //debugging
     //console.log(__SCRIPTBLOCK); //debugging
     let _i = 0;
+    let __ClEANHTML;
+
 
     /**Loop the blocks*/
     __SCRIPTBLOCK.forEach(__block => {
         try {
-            _i += 1;
+
             let __execVal = eval(__block[1]);
 
             if (__execVal === undefined) {
@@ -75,187 +177,34 @@ function CreateEnv(cb) {
             };
 
             /**Replace conditional Block in the html block*/
-            const __ClEANHTML = __HTML.replace(/\$=>\s*\(/g, "").replace(/\)\$/, "").replace(__block[1], __execVal); // replace conditional block
+            __ClEANHTML = __HTML.replace(/\$=>\s*\(/g, "").replace(/\)\$/, "").replace(__block[1], __execVal); // replace conditional block
             __HTML = __ClEANHTML;
 
-            if (_i === __SCRIPTBLOCK.length) {
-                const doc = new DOMParser();
-                const __parsDoc = doc.parseFromString(__ClEANHTML.toString(), "text/html");
-
-                __parsDoc.body.childNodes.forEach(__node => {
-                    if(__node.classList != undefined) {
-                        if (__node.classList.value === "par"){
-                            __node.style.color = "red";
-                        }
-                    };
-
-                    const __IMPORTED = document.importNode(__node, true);
-                    document.body.appendChild(__IMPORTED);
-                    //console.log(__IMPORTED)
-                });
-            }
         }
         catch (e) {
             console.error(e)
         }
-    })
+    });
 
 
-    for (let ch of lines) {
+    /**Create new dom parser */
+    const doc = new DOMParser();
+    const __parsDoc = doc.parseFromString(__HTML.toString(), "text/html");
+    parseDoc = __parsDoc;
 
-        lineCount += 1;
-        /**=====================THE CLASS SELECTOR============================
-         * The @class is used to group html elements
-         * 
-         */
-        if (ch.trim().startsWith("@class") && ch.trim().endsWith("{")) {
-            if (!_isInClassBlock) {
-                _isInClassBlock = true
-                _isClassFound
-            }
-        }
+    /**===============================Apply class values======================== */
+    __parsDoc.body.childNodes.forEach(__node => {
 
+        __renderClass(__node, __CLASSES);
 
-        /**Comment: apply thes styles if any is given */
-        if (ch.trim().startsWith("--")) {
-            if (_isInClassBlock) {
-                setTimeout(() => {
+        /**Import the node */
+        const __IMPORTED = document.importNode(__node, true);
+        document.body.appendChild(__IMPORTED);
 
-                    const __class = ch.trim().replace("--", "").replace(";", "").split(".")[0]
-                    for (let __element of __elements) {
-                        if (__element.classList.contains(__class)) {
-
-                            const [_prop, _value] = ch.trim().replace("--", "").replace(";", "").split("=", 2);
-                            const _refineProp = _prop.trim().split(".")[1];
-                            let __style = `${_refineProp.trim().toString()}`
-
-                            __element['style'][`${__style}`] = _value
-
-                        }
-
-                    }
-
-                }, .1)
-
-            }
-        }
-
-        if (ch.trim().startsWith("$")) {
-            if (_isInClassBlock) {
-                const __class = ch.trim().replace("$", "").replace("{", "").split(".")[0];
-
-                setTimeout(() => {
-                    for (let _el of __elements) {
-
-                        if (_el.classList.contains(__class.trim())) {
-                            let _line = "";
-                            for (let c of lines) {
-                                _line += c
-                            };
-                            const regex = new RegExp(`\\$${__class.trim()}\\s*\\{([\\s\\S]*?)\\}\\$`, "g");
-
-                            const _block = [..._line.toString().trim().matchAll(regex)];
-
-                            _block.forEach(b => {
-                                let _exec = b[1]
-
-                                if (b[1].toString().trim().includes("$.")) {
-                                    _exec = _exec.toString().trim().replaceAll("$.", `_el.`).replaceAll("_el.)", "_el)");
-                                }
-
-                                eval(_exec)
-
-                            })
-                        }
-                    }
-                })
-            }
-        }
-
-        if (ch.trim().endsWith("};")) {
-            if (_isInClassBlock) {
-                _isInClassBlock = false;
-            }
-        };
-
-    };
-    /**
-     * ======================================ROOT===================================
-     * ==============================================================================
-     * ==============================================================================
-     * The root
-     */
-
+    });
 
     //=================================================================================
 
 }
 
 const keywords = ["@class", "HTML"]
-CreateEnv(() => {
-    ``` 
-  
-    @class header {
-        --header.color = white;
-        --header.backgroundColor = black;
-        --header.padding = 1rem 1rem;
-        --header.fontFamily = sans-serif;
-        --header.textAlign = center;
-
-    };
-
-
-    @class par {
-        --par.color = orange;
-
-        $par {
-
-            const name = "Elkanah Cole";
-            document.body.addEventListener("click", (e) => {
-                if ($.) {
-                    const newPara = $.cloneNode(true);
-                    document.body.appendChild(newPara);
-
-                };
-            })        
-        }$
-
-    };
-    
-
-    HTML <$>
-            <h1 class="header">
-                About me
-            </h1>
-
-            $=> (
-
-                (() => {
-
-                    if (name == "elk") {
-
-                        return '<p class="par">My name is Elkanah Cole Know more about <a href="#">Me</a></p>';
-
-                    }else {
-                        return '<p class="par">Please Enter a valid name</p>'
-                    }
-
-                })()
-
-            )$
-            
-            $=> (
-
-                (() => { 
-                    if (2==1) {
-                        return '<p>yes 2 == 2</p>'; 
-                    }
-                }
-                )();  
-
-            )$
-
-            <span>Come on</span>
-        </$>    
-    ```
-})
