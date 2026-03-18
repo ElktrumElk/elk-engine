@@ -1,6 +1,8 @@
 
+
 /**Holds the classes name*/
 const __CLASSES = new Object();
+const __ID = new Object();
 
 export function updateSatet(value, func) {
 
@@ -20,7 +22,7 @@ export function updateSatet(value, func) {
     return proxy;
 };
 
-
+/**The element array for element update */
 let __elm = new Array();
 
 export function placeElement({ _element, childNode, isReplace = false }) {
@@ -50,8 +52,9 @@ export function placeElement({ _element, childNode, isReplace = false }) {
     }
 }
 
-
+/**Render class====================================================================== */
 function __renderClass(__node, __CLASSES) {
+
     if (__node.classList != undefined) {
         if (__node.classList.length !== 0) {
             if (__node.classList.value === __CLASSES[`${__node.classList.value}`].classname) {
@@ -65,6 +68,25 @@ function __renderClass(__node, __CLASSES) {
     }
 }
 
+/**Render Id=============================================================================================== */
+function __renderId(__node, __ID) {
+
+    if (__node.id !== undefined) {
+        const __attr = __node.getAttribute("id");
+        if (__ID[`${__attr}`]) {
+            if (__ID[`${__attr}`].scripts.length > 0) {
+
+                __ID[`${__attr}`].scripts.forEach(_script => {
+
+                    const _refineScript = _script.replaceAll(`$${__attr}`, `__node`);
+                    console.log(_refineScript)
+                    eval(_refineScript);
+
+                });
+            }
+        }
+    }
+}
 
 
 
@@ -101,15 +123,13 @@ function __renderClass(__node, __CLASSES) {
  */
 export default function CreateEnv(cb) {
 
-
+    /**split the cb */
     const lines = cb.toString().split("\r\n");
-    let lineCount = 0;
 
     let __elements = new Array();
 
     /**Docuemnt parser for external use */
     let parseDoc;
-
 
     /**Check wether a body an html was given*/
     let _isInBody = false;
@@ -137,24 +157,59 @@ export default function CreateEnv(cb) {
     const __CLASSSNAMEEARCHPATTERN = /@class\s*([\s\S]*?)\{/g;
     const __CLASSBLOCKSEARCHPATTERN = /@class\s*([\s\S]*?)\{([\s\S\r]*?)\}/g
 
+    /**Pattern to search for id */
+    const __IDNAMESEARCHPATTERN = /@id\s*([\s\S]*?)\{/g;
+    const __IDBLOCKSEARCHPATTERN = /@id\s*([\s\S]*?)\{([\s\S\r]*?)\}\$/g;
 
-
+    /**Class search============================================================================= */
     let __CLASS = [...l.trim().toString().matchAll(/@class\s*([\s\S]*?)\{/g)];
     let __CLASSVAL = [...l.trim().toString().matchAll(__CLASSBLOCKSEARCHPATTERN)];
 
     __CLASS.forEach((_cls, _idx) => {
 
-        const _value = __CLASSVAL[_idx][2].trim().replaceAll(" ", "").split(";");
-        const _styles = _value.filter(x => x.startsWith("--"))
+        if (_idx < __CLASSVAL.length) {
 
-        const __CLASSNAME = _cls[1].trim();
-        __CLASSES[__CLASSNAME] = {
-            styles: _styles,
-            classname: __CLASSNAME
-        };
+            const _value = __CLASSVAL[_idx][2].trim().replaceAll(" ", "").split(";");
+            const _styles = _value.filter(x => x.startsWith("--"))
+
+            
+            /**Create the class object with it properties */
+            const __CLASSNAME = _cls[1].trim();
+            __CLASSES[__CLASSNAME] = {
+                styles: _styles,
+                classname: __CLASSNAME
+            };
+        }
     });
 
-    /**Check for given html*/
+    /**ID search ====================================================================== */
+    const __IDNAME = [...l.trim().toString().matchAll(__IDNAMESEARCHPATTERN)];
+    const __IDSCRIPTBLOCK = [...l.trim().toString().matchAll(__IDBLOCKSEARCHPATTERN)];
+    const _idscript = new Array();
+
+    __IDNAME.forEach((_ID, _idx) => {
+
+        const _IDname = _ID[1].trim();
+        const _script = [...__IDSCRIPTBLOCK[_idx][2].toString().trim().matchAll(__SCRIPTBLOCKPATTERN)];
+        const _styles = __IDSCRIPTBLOCK[_idx][2].trim().replaceAll(" ", "").split(";").filter(x => x.startsWith("--"));
+
+        /**Create the id with it properties */
+        __ID[_IDname] = {
+            idname: _IDname,
+            styles: _styles,
+            scripts: [],
+            element: null
+        };
+
+        /**Push in scripts */
+        _script.forEach(_s => {
+            _idscript.push(_s[1].trim());
+            __ID[_IDname].scripts.push(_s[1].trim())
+        });
+    });
+
+
+    /**Check for given html=====================================================================*/
     let __HTML = [...l.toString().trim().matchAll(/HTML\s*\<\$>([\s\r\S]*?)<\/\$>/g)][0][1];
 
     /**Get The conditional Script Block in the HTML body*/
@@ -164,7 +219,6 @@ export default function CreateEnv(cb) {
     //console.log(__SCRIPTBLOCK); //debugging
     let _i = 0;
     let __ClEANHTML;
-
 
     /**Loop the blocks*/
     __SCRIPTBLOCK.forEach(__block => {
@@ -191,20 +245,29 @@ export default function CreateEnv(cb) {
     const doc = new DOMParser();
     const __parsDoc = doc.parseFromString(__HTML.toString(), "text/html");
     parseDoc = __parsDoc;
+    //console.log(__parsDoc.body.querySelectorAll("*"))
 
     /**===============================Apply class values======================== */
+    Array.from(__parsDoc.body.querySelectorAll("*")).forEach(__node => {
+        __renderClass(__node, __CLASSES);
+    })
+
+
+
     __parsDoc.body.childNodes.forEach(__node => {
 
-        __renderClass(__node, __CLASSES);
-
         /**Import the node */
+
         const __IMPORTED = document.importNode(__node, true);
         document.body.appendChild(__IMPORTED);
 
     });
 
+    //**Apply script later */
+    Array.from(document.body.querySelectorAll("*")).forEach(__n => {
+        __renderId(__n, __ID);
+    })
     //=================================================================================
-
 }
 
 const keywords = ["@class", "HTML"]
